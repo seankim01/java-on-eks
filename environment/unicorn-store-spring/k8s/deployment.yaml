@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unicorn-store-spring
+  namespace: unicorn-store-spring
+  labels:
+    project: unicorn-store
+    app: unicorn-store-spring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unicorn-store-spring
+  template:
+    metadata:
+      labels:
+        app: unicorn-store-spring
+    spec:
+      nodeSelector:
+        karpenter.sh/nodepool: dedicated
+      serviceAccountName: unicorn-store-spring
+      containers:
+        - name: unicorn-store-spring
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+          image: 990612949597.dkr.ecr.us-east-1.amazonaws.com/unicorn-store-spring:latest
+          imagePullPolicy: Always
+          env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "unicornstore-db-secret"
+                  key: "password"
+                  optional: false
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://unicornstore-db-cluster.cluster-c0ofkvegmpiq.us-east-1.rds.amazonaws.com:5432/unicorns
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            failureThreshold: 6
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            failureThreshold: 6
+            periodSeconds: 5
+            initialDelaySeconds: 10
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            failureThreshold: 6
+            periodSeconds: 5
+            initialDelaySeconds: 10
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
+          securityContext:
+            capabilities:
+              add:
+                - SYS_PTRACE
+            privileged: false
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
